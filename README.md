@@ -11,9 +11,6 @@ Requires [uv](https://docs.astral.sh/uv/).
 ```bash
 uv sync
 ```
-
-PyTorch is pulled from the CUDA 13.0 build (`pyproject.toml` pins the index) — an NVIDIA driver supporting CUDA 13.0+ is required for GPU acceleration.
-
 ## Usage
 
 ```bash
