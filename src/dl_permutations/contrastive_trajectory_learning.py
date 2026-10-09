@@ -132,7 +132,7 @@ class TripletDataset(Dataset):
         return (torch.as_tensor(self.perm[a]), torch.as_tensor(self.perm[a + 1]),
                 torch.as_tensor(self.perm[n]))
 
-
+# consider extracting this to shared directory
 class RNNEncoder(nn.Module):
     def __init__(self):
         super().__init__()
