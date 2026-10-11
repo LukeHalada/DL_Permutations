@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 notebooks/*.pt
+build/
+outputs/*
+!outputs/.gitkeep
+!outputs/stn_pca.png
