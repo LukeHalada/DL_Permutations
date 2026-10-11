@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from dl_permutations.genetic_alg.ga import GA_TSP
 from dl_permutations.genetic_alg.tsp import TSP
+from dl_permutations.models.rnn_encoder import RNNEncoder
 
 CITIES_COUNT = 20
 COORD_MIN, COORD_MAX = 0, 10
@@ -132,22 +133,8 @@ class TripletDataset(Dataset):
         return (torch.as_tensor(self.perm[a]), torch.as_tensor(self.perm[a + 1]),
                 torch.as_tensor(self.perm[n]))
 
-# consider extracting this to shared directory
-class RNNEncoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.embedding = nn.Embedding(CITIES_COUNT, EMB_DIM)
-        self.lstm = nn.LSTM(EMB_DIM, HIDDEN_SIZE, batch_first=True)
-        self.proj = nn.Sequential(
-            nn.Linear(HIDDEN_SIZE, HIDDEN_SIZE),
-            nn.ReLU(),
-            nn.Dropout(DROPOUT),
-            nn.Linear(HIDDEN_SIZE, OUT_DIM),
-        )
-
-    def forward(self, x):
-        _, (hn, _) = self.lstm(self.embedding(x))
-        return F.normalize(self.proj(hn.squeeze(0)), dim=1)
+def make_encoder():
+    return RNNEncoder(CITIES_COUNT, EMB_DIM, HIDDEN_SIZE, OUT_DIM, DROPOUT, normalize=True)
 
 
 @torch.no_grad()
@@ -247,7 +234,7 @@ def main():
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE)
     val_loader = DataLoader([val_ds[i] for i in range(len(val_ds))], batch_size=BATCH_SIZE)
 
-    model = train(RNNEncoder().to(device), train_loader, val_loader, device)
+    model = train(make_encoder().to(device), train_loader, val_loader, device)
 
     collapse_report(embed(model, data["perm"], device), data["fitness"])
     plot_stn(model, data, device, val_runs[:PLOT_RUNS])
