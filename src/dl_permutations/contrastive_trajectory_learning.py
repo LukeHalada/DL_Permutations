@@ -1,5 +1,6 @@
 import os
 from concurrent.futures import ProcessPoolExecutor
+import yaml
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,39 +10,46 @@ import torch.nn.functional as F
 from sklearn.decomposition import PCA
 from torch.utils.data import DataLoader, Dataset
 
-from dl_permutations.genetic_alg.ga import GA_TSP
-from dl_permutations.genetic_alg.tsp import TSP
-from dl_permutations.models.rnn_encoder import RNNEncoder
+from src.dl_permutations.genetic_alg.ga import GA_TSP
+from src.dl_permutations.genetic_alg.tsp import TSP
+from src.dl_permutations.models.rnn_encoder import RNNEncoder
 
-CITIES_COUNT = 20
-COORD_MIN, COORD_MAX = 0, 10
-START_CITY = 1
-TSP_SEED = 21
+config = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), "contrastive_trajectory_config.yaml")))
+tsp_config = config['tsp_config']
+ga_config = config['ga_config']
+model_config = config['model_config']
+train_config = config['training_config']
 
-N_RUNS = 100
-N_GENERATIONS = 100
-POPULATION_SIZE = 50
-MUTATION_RATE = 0.1
-CROSS_RATE = 0.1
-TOURNAMENT_SIZE = 5
-BASE_SEED = 1000
+CITIES_COUNT = tsp_config['cities_count']
+COORD_MIN, COORD_MAX = tsp_config['min'], tsp_config['max']
+START_CITY = tsp_config['start']
+TSP_SEED = tsp_config['seed']
+
+N_RUNS = ga_config['n_runs']
+N_GENERATIONS = ga_config['n_generations']
+POPULATION_SIZE = ga_config['population_size']
+MUTATION_RATE = ga_config['mutation_rate']
+CROSS_RATE = ga_config['cross_rate']
+TOURNAMENT_SIZE = ga_config['tournament_size']
+BASE_SEED = ga_config['base_seed']
 N_WORKERS = os.cpu_count()
 
-HARD_NEGATIVE_WINDOW = 20
-TRIPLETS_PER_EPOCH = 50_000
-VAL_RUN_RATIO = 0.2
+HARD_NEGATIVE_WINDOW = train_config['negative_window']
+TRIPLETS_PER_EPOCH = train_config['triplets_per_epoch']
+VAL_RUN_RATIO = train_config['val_ratio']
+BATCH_SIZE = train_config['batch_size']
+EPOCHS = train_config['epochs']
+LR = train_config['lr']
+WEIGHT_DECAY = train_config['weight_decay']
+MAX_PATIENCE = train_config['max_patience']
+TORCH_SEED = train_config['torch_seed']
 
-EMB_DIM = 32
-HIDDEN_SIZE = 128
-OUT_DIM = 64
-DROPOUT = 0.1
-MARGIN = 0.3
-BATCH_SIZE = 256
-EPOCHS = 30
-LR = 1e-3
-WEIGHT_DECAY = 1e-5
-MAX_PATIENCE = 6
-TORCH_SEED = 0
+
+EMB_DIM = model_config['emb_dim']
+HIDDEN_SIZE = model_config['hidden_size']
+OUT_DIM = model_config['out_dim']
+DROPOUT = model_config['dropout']
+MARGIN = model_config['margin']
 
 PLOT_RUNS = 3
 VARIANCE_THRESHOLD = 0.95
@@ -49,6 +57,7 @@ VARIANCE_THRESHOLD = 0.95
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUTPUT_DIR = os.path.join(ROOT_DIR, "outputs")
 TRAJECTORIES_PATH = os.path.join(OUTPUT_DIR, "trajectories.npz")
+EMBEDDINGS_PATH = os.path.join(OUTPUT_DIR, "embeddings.npz")
 MODEL_PATH = os.path.join(OUTPUT_DIR, "contrastive_encoder.pt")
 PLOT_PATH = os.path.join(OUTPUT_DIR, "stn_pca.png")
 
@@ -83,7 +92,7 @@ def load_or_generate_trajectories():
     if os.path.exists(TRAJECTORIES_PATH):
         return dict(np.load(TRAJECTORIES_PATH))
     data = generate_trajectories()
-    np.savez(TRAJECTORIES_PATH, **data)
+    np.savez_compressed(TRAJECTORIES_PATH, **data)
     return data
 
 
@@ -238,7 +247,6 @@ def main():
 
     collapse_report(embed(model, data["perm"], device), data["fitness"])
     plot_stn(model, data, device, val_runs[:PLOT_RUNS])
-
 
 if __name__ == "__main__":
     main()
