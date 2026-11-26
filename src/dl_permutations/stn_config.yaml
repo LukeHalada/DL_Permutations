@@ -1,0 +1,28 @@
+# STN comparison of the permutation space with encoder embeddings and compressions without learning
+# (notebooks/stn_summary.ipynb). edge_triplet_config and encoder_protocol_config are hashed into the names of the
+# encoder checkpoints, together with the tsp, ga, training and model sections of contrastive_trajectory_config.yaml.
+
+stn_config:
+  centers_seed: 0
+  metric_ks: [20, 50]
+  figure_ks: [10, 20]
+  baseline_dim: 64
+
+edge_triplet_config:
+  min_gap: 2
+  near_share: 0.5
+  near_fraction: 0.05
+  synthetic_share: 0.5
+  max_moves: 3
+  synthetic_elite_share: 0.2
+  synthetic_max_moves: 5
+
+encoder_protocol_config:
+  epochs: 200
+  seeds: [0, 1, 2]
+
+test_set_config:
+  n_runs: 100
+
+replication_config:
+  tsp_seeds: [101, 102, 103, 104, 105]

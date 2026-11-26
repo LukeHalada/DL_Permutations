@@ -92,26 +92,21 @@ class GA_TSP():
     def fit(self, 
             epochs:int, 
             starting_population:np.ndarray,
-            verbose=-1,
-            return_populations=False):
+            verbose=-1):
         """Calculates new generations iteratively.
 
         Args:
             epochs (int): Number of generations to calculate.
             starting_population (np.ndarray): An array of initial permutations.
             verbose (int, optional): Number of generations between print statements. -1 for no print statements. Defaults to -1.
-            return_populations (bool, optional): Also return the population of every generation. Defaults to False.
 
         Returns:
             np.ndarray: The final population.
             np.ndarray: The history of the best route in each generation.
-            np.ndarray: Only if return_populations; populations[g] is the population history[g] was selected from.
         """
         population = starting_population
         history = []
-        populations = []
         for generation in range(epochs):
-            populations.append(population)
             new_population = []
             best_route = min(population, key=self.fitness)
             history.append(best_route)
@@ -132,6 +127,4 @@ class GA_TSP():
 
             population = np.array(new_population)
 
-        if return_populations:
-            return np.array(population), np.array(history), np.array(populations)
         return np.array(population), np.array(history)

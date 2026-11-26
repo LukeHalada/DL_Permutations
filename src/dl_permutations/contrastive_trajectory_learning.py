@@ -2,7 +2,6 @@ import hashlib
 import json
 import os
 from concurrent.futures import ProcessPoolExecutor
-from functools import partial
 import yaml
 
 import matplotlib.pyplot as plt
@@ -74,33 +73,27 @@ MODEL_PATH = os.path.join(OUTPUT_DIR, "contrastive_encoder.pt")
 PLOT_PATH = os.path.join(OUTPUT_DIR, "stn_pca.png")
 
 
-def make_tsp(seed=None):
-    """The TSP instance; seed (default TSP_SEED) draws the city coordinates."""
-    return TSP(CITIES_COUNT, min=COORD_MIN, max=COORD_MAX, start=START_CITY,
-               seed=TSP_SEED if seed is None else seed)
+def make_tsp():
+    return TSP(CITIES_COUNT, min=COORD_MIN, max=COORD_MAX, start=START_CITY, seed=TSP_SEED)
 
 
-def run_single_ga(run_id, return_populations=False, tsp_seed=None):
-    tsp = make_tsp(tsp_seed)
+def run_single_ga(run_id):
+    tsp = make_tsp()
     np.random.seed(BASE_SEED + run_id)
     ga = GA_TSP(tsp.cities, POPULATION_SIZE, MUTATION_RATE, CROSS_RATE,
                 TOURNAMENT_SIZE, tsp.total_distance)
-    out = ga.fit(N_GENERATIONS, tsp.generate_solutions(POPULATION_SIZE),
-                 return_populations=return_populations)
-    return out[1:] if return_populations else out[1]
+    _, history = ga.fit(N_GENERATIONS, tsp.generate_solutions(POPULATION_SIZE))
+    return history
 
 
-def generate_trajectories(tsp_seed=None, run_ids=None):
-    """Elite of every generation of N_RUNS GA runs; tsp_seed selects another TSP instance (default TSP_SEED), run_ids
-    other runs (default 0..N_RUNS-1; run r uses the seed BASE_SEED + r)."""
-    tsp = make_tsp(tsp_seed)
-    run_ids = np.arange(N_RUNS) if run_ids is None else np.asarray(run_ids)
+def generate_trajectories():
+    tsp = make_tsp()
     with ProcessPoolExecutor(N_WORKERS) as pool:
-        histories = list(pool.map(partial(run_single_ga, tsp_seed=tsp_seed), run_ids.tolist()))
+        histories = list(pool.map(run_single_ga, range(N_RUNS)))
     perms = np.concatenate(histories)
     return {
-        "run_id": np.repeat(run_ids, N_GENERATIONS),
-        "generation": np.tile(np.arange(N_GENERATIONS), len(run_ids)),
+        "run_id": np.repeat(np.arange(N_RUNS), N_GENERATIONS),
+        "generation": np.tile(np.arange(N_GENERATIONS), N_RUNS),
         "perm": perms,
         "fitness": np.array([tsp.total_distance(p) for p in perms]),
     }
@@ -177,73 +170,35 @@ def evaluate_triplets(model, loader, device):
     return loss / len(loader), correct / total
 
 
-def train_epoch(model, loader, criterion, optimizer, device, local_loader=None, local_weight=0.0):
-    """One epoch of triplet training; with local_loader every batch adds local_weight times the triplet loss of a
-    batch of local triplets."""
-    model.train()
-    total = 0.0
-    batches = zip(loader, local_loader) if local_loader is not None else ((batch, None) for batch in loader)
-    for (a, p, n), local in batches:
-        a, p, n = a.to(device), p.to(device), n.to(device)
-        loss = criterion(model(a), model(p), model(n))
-        if local is not None:
-            la, lp, ln = (t.to(device) for t in local)
-            loss = loss + local_weight * criterion(model(la), model(lp), model(ln))
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        total += loss.item()
-    return total / len(loader)
-
-
-def train(model, train_loader, val_loader, device, path=None, epochs=None):
-    """Triplet training with early stopping; keeps the checkpoint with the lowest validation loss (path, default
-    MODEL_PATH). The protocol of the original pipeline."""
-    path = path or MODEL_PATH
+def train(model, train_loader, val_loader, device):
     criterion = nn.TripletMarginLoss(margin=MARGIN)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     best, patience = np.inf, 0
 
-    for epoch in range(epochs or EPOCHS):
-        train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
+    for epoch in range(EPOCHS):
+        model.train()
+        train_loss = 0.0
+        for a, p, n in train_loader:
+            a, p, n = a.to(device), p.to(device), n.to(device)
+            loss = criterion(model(a), model(p), model(n))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+
         val_loss, val_acc = evaluate_triplets(model, val_loader, device)
-        print(f"epoch {epoch:2d} | train {train_loss:.4f} | val {val_loss:.4f} | val triplet acc {val_acc:.3f}")
+        print(f"epoch {epoch:2d} | train {train_loss / len(train_loader):.4f} | "
+              f"val {val_loss:.4f} | val triplet acc {val_acc:.3f}")
 
         if val_loss < best:
             best, patience = val_loss, 0
-            torch.save(model.state_dict(), path)
+            torch.save(model.state_dict(), MODEL_PATH)
         else:
             patience += 1
             if patience >= MAX_PATIENCE:
                 break
 
-    model.load_state_dict(torch.load(path, map_location=device))
-    return model
-
-
-def train_fixed_epochs(model, train_loader, val_loader, device, path, epochs, local_loaders=None, local_weight=0.0):
-    """Triplet training for exactly `epochs` epochs; the checkpoint (path) is the model after the last epoch.
-
-    The validation loss is only logged for monitoring and selects nothing. The per-epoch log is kept in
-    model.training_history. local_loaders (train, validation) add a local term: the training loss of every batch
-    becomes loss + local_weight * local loss, and the local validation loss is logged separately.
-    """
-    criterion = nn.TripletMarginLoss(margin=MARGIN)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
-    local_train, local_val = local_loaders or (None, None)
-    history = []
-    for epoch in range(epochs):
-        train_loss = train_epoch(model, train_loader, criterion, optimizer, device, local_train, local_weight)
-        val_loss, val_acc = evaluate_triplets(model, val_loader, device)
-        entry = {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, "val_acc": val_acc}
-        line = f"epoch {epoch:3d} | train {train_loss:.4f} | val {val_loss:.4f} | val triplet acc {val_acc:.3f}"
-        if local_val is not None:
-            entry["val_local_loss"], entry["val_local_acc"] = evaluate_triplets(model, local_val, device)
-            line += f" | local val {entry['val_local_loss']:.4f} acc {entry['val_local_acc']:.3f}"
-        history.append(entry)
-        print(line)
-    torch.save(model.state_dict(), path)
-    model.training_history = history
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
     return model
 
 
@@ -284,54 +239,22 @@ def plot_stn(model, data, device, runs):
     plt.show()
 
 
-def split_runs():
-    shuffled = np.random.default_rng(TORCH_SEED).permutation(N_RUNS)
-    n_val = int(N_RUNS * VAL_RUN_RATIO)
-    return shuffled[:n_val], shuffled[n_val:]
-
-
-def fit_encoder(data, device, dataset=TripletDataset, path=None, epochs=None, fixed_epochs=False,
-                make_model=make_encoder, seed=0, local_dataset=None, local_data=None, local_weight=0.0):
-    """Trains an encoder on triplets from dataset (train runs), validated on triplets of the validation runs.
-
-    The defaults are the original pipeline (RNNEncoder, early stopping, checkpoint MODEL_PATH). Variants reuse it with
-    another dataset, model factory, checkpoint path and number of epochs; fixed_epochs=True trains exactly `epochs`
-    epochs and keeps the last one (train_fixed_epochs). seed shifts the torch seed (initialization) and the seed of
-    the training triplets; seed 0 is the original pipeline, and the validation triplets are the same for every seed.
-    local_weight > 0 (fixed_epochs only) adds the local term: triplets of local_dataset on local_data (default data),
-    as many per epoch as the main ones, weighted by local_weight; the main triplets and the initialization stay
-    those of local_weight = 0.
-    """
-    torch.manual_seed(TORCH_SEED + seed)
-    val_runs, train_runs = split_runs()
-
-    train_ds = dataset(data, train_runs, TRIPLETS_PER_EPOCH, seed=1 + 2 * seed)
-    val_ds = dataset(data, val_runs, int(TRIPLETS_PER_EPOCH * VAL_RUN_RATIO), seed=2)
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE)
-    val_loader = DataLoader([val_ds[i] for i in range(len(val_ds))], batch_size=BATCH_SIZE)
-
-    local_loaders = None
-    if local_weight:
-        assert fixed_epochs, "the local term is part of the fixed-epoch protocol only"
-        local_data = data if local_data is None else local_data
-        local_train = local_dataset(local_data, train_runs, TRIPLETS_PER_EPOCH, seed=101 + 2 * seed)
-        local_val = local_dataset(local_data, val_runs, int(TRIPLETS_PER_EPOCH * VAL_RUN_RATIO), seed=102)
-        local_loaders = (DataLoader(local_train, batch_size=BATCH_SIZE),
-                         DataLoader([local_val[i] for i in range(len(local_val))], batch_size=BATCH_SIZE))
-
-    model = make_model().to(device)
-    if fixed_epochs:
-        return train_fixed_epochs(model, train_loader, val_loader, device, path, epochs, local_loaders, local_weight)
-    return train(model, train_loader, val_loader, device, path, epochs)
-
-
 def main():
+    torch.manual_seed(TORCH_SEED)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     data = drop_repeated_steps(load_or_generate_trajectories())
-    val_runs, _ = split_runs()
 
-    model = fit_encoder(data, device)
+    shuffled = np.random.default_rng(TORCH_SEED).permutation(N_RUNS)
+    n_val = int(N_RUNS * VAL_RUN_RATIO)
+    val_runs, train_runs = shuffled[:n_val], shuffled[n_val:]
+
+    train_ds = TripletDataset(data, train_runs, TRIPLETS_PER_EPOCH, seed=1)
+    val_ds = TripletDataset(data, val_runs, int(TRIPLETS_PER_EPOCH * VAL_RUN_RATIO), seed=2)
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE)
+    val_loader = DataLoader([val_ds[i] for i in range(len(val_ds))], batch_size=BATCH_SIZE)
+
+    model = train(make_encoder().to(device), train_loader, val_loader, device)
 
     collapse_report(embed(model, data["perm"], device), data["fitness"])
     plot_stn(model, data, device, val_runs[:PLOT_RUNS])
