@@ -10,7 +10,7 @@ ga_config:
   n_generations: 100
   population_size: 50
   mutation_rate: 0.1
-  cross_rate: 0.1
+  cross_rate: 1.0
   tournament_size: 5
   base_seed: 1000
 
@@ -32,3 +32,56 @@ model_config:
   dropout: 0.1
   margin: 0.3
   normalize: True
+
+stn_config:
+  n_centers: [5, 10, 20, 50]
+  centers_seed: 0
+
+edge_triplet_config:
+  min_gap: 2
+  near_share: 0.5
+  near_fraction: 0.05
+  synthetic_share: 0.5
+  max_moves: 3
+  synthetic_elite_share: 0.2
+  synthetic_max_moves: 5
+
+# protocol of every new encoder training: fixed number of epochs, checkpoint of the last epoch
+encoder_protocol_config:
+  epochs: 200
+  seeds: [0, 1, 2]
+
+# extra GA runs on instance 1 (run ids after ga_config.n_runs, seeds base_seed + run id), evaluation only
+test_set_config:
+  n_runs: 100
+
+# local term of the training objective: triplets (elite, the elite after one swap or 2-opt move, one of its
+# nearest elites) with exact edge distances; their triplet loss is added with a weight; weights scanned on
+# incidence_mlp (0 = the edge objective alone)
+local_term_config:
+  near_fraction: 0.05
+  weights: [0.0, 0.25, 0.5, 1.0]
+
+# selection set: more GA runs on instance 1 (run ids first_run.., seeds base_seed + run id = 1200-1299, outside
+# the training seeds 1000-1099 and the test seeds 1100-1199); every final selection is made here
+dev_set_config:
+  first_run: 200
+  n_runs: 100
+
+# final selection rule: criterion = mean gain over the own random init of the soft agreement, the funnel
+# (-|best_strength - best_strength of the permutation space|), end_equal (each averaged over ks) and the
+# generation probe; a tie when the difference to the top is below se_factor bootstrap standard errors (runs of
+# the dev set resampled); among tied variants the simpler one
+selection_config:
+  ks: [20, 50]
+  bootstrap: 1000
+  bootstrap_seed: 0
+  se_factor: 2
+
+# replication on new instances (the unit of replication is the instance): incidence_mlp, w = 0, trained on the
+# elites and on the populations of each instance with one seed, evaluated on its test runs (seeds 1100-1199)
+replication_config:
+  tsp_seeds: [101, 102, 103, 104, 105]
+  arch: incidence_mlp
+  objectives: [edge, population_edge]
+  seed: 0

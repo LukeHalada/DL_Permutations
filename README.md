@@ -28,7 +28,9 @@ Contrastive trajectory experiment:
 uv run python -m dl_permutations.contrastive_trajectory_learning
 ```
 
-The same through `make`: `make sync`, `make lab`, `make train`, `make notebooks` (executes all notebooks into `build/notebooks/`), `make clean`.
+The same through `make`: `make sync`, `make lab`, `make train`, `make test`, `make notebooks` (executes all notebooks into `build/notebooks/`), `make clean`.
+
+STN with clustered locations, permutation vs. embedding space: `uv run python -m dl_permutations.stn_clusters` (or `make stn`). Controls (tour orientation, untrained encoder, null model, ties, probes): `notebooks/stn_controls.ipynb`. Encoder variants with other training objectives (edge-distance triplets, canonical orientation): `notebooks/encoder_variants.ipynb`. Encoder architectures (LSTM, MLP on the edge incidence vector, DeepSets over edges) under one fixed-epoch protocol, evaluated on held-out GA runs: `notebooks/encoder_architectures.ipynb`; invariance tests: `make test`. Final selection on a dev set with a run bootstrap, replication over five instances and one table of the whole project: `notebooks/project_summary.ipynb`; reproducibility: `REPRODUCIBILITY.md`.
 
 ## Structure
 
