@@ -10,7 +10,7 @@ ga_config:
   n_generations: 100
   population_size: 50
   mutation_rate: 0.1
-  cross_rate: 0.1
+  cross_rate: 1.0
   tournament_size: 5
   base_seed: 1000
 

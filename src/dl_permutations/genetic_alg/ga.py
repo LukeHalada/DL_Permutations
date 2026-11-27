@@ -10,6 +10,21 @@ class GA_TSP():
                  cross_rate:float,
                  tournament_size:int,
                  fitness:callable):
+        """Genetic algorithm for the TSP: tournament selection, ordered crossover (OX) and swap mutation, with the
+        best tour of every generation kept (elitism).
+
+        Args:
+            cities (np.ndarray): City coordinates of the instance.
+            population_size (int): Number of tours per generation.
+            mutation_rate (float): Per-gene swap probability: every position of a child is swapped with a uniformly
+                random position with this probability, so a child gets mutation_rate * length swaps on average.
+                This is a deliberate per-gene rate, not the probability that a child is mutated at all.
+            cross_rate (float): Probability that a child is made by ordered crossover of the two tournament winners;
+                otherwise it is a copy of the first winner. Both kinds of children are then mutated. At 1.0 every
+                child is crossed and no random number is drawn for the decision.
+            tournament_size (int): Number of tours per tournament.
+            fitness (callable): Tour length to minimize.
+        """
         self.cities = cities
         self.population_size = population_size
         self.mutation_rate = mutation_rate
@@ -40,8 +55,8 @@ class GA_TSP():
         Returns:
             np.ndarray: A new member of the population created from the parents.
         """
-        start = np.random.randint(0, len(parent1) - 1)
-        end = np.random.randint(start, len(parent1)-1)
+        start = np.random.randint(0, len(parent1))
+        end = np.random.randint(start, len(parent1))
 
         #first take a fragment of parent1 and put it in child
         child = np.empty(len(parent1), dtype=int)
@@ -59,7 +74,8 @@ class GA_TSP():
         return child
     
     def mutation(self, child:np.ndarray):
-        """Preforms a swap mutation, swapping two elements of the child permutation.
+        """Preforms a swap mutation: every position is swapped, with probability mutation_rate, with a uniformly
+        random position (possibly itself).
 
         Args:
             child (np.ndarray): Member of a population to be mutated.
@@ -69,7 +85,7 @@ class GA_TSP():
         """
         for i in range(child.shape[0]):
             if np.random.uniform(0, 1) < self.mutation_rate:
-                target = np.random.randint(0, child.shape[0]-1)
+                target = np.random.randint(0, child.shape[0])
                 child[i], child[target] = child[target], child[i]
         return child
     
@@ -102,7 +118,10 @@ class GA_TSP():
             for _ in range(1, self.population_size):
                 p1 = self.tournamet_selection(population)
                 p2 = self.tournamet_selection(population)
-                child = self.crossover(p1, p2)
+                if self.cross_rate >= 1 or np.random.uniform(0, 1) < self.cross_rate:
+                    child = self.crossover(p1, p2)
+                else:
+                    child = p1.copy()
                 child = self.mutation(child)
                 new_population.append(child)
 

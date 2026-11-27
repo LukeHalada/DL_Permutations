@@ -614,7 +614,9 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
+    { name = "networkx" },
     { name = "numpy" },
+    { name = "pyyaml" },
     { name = "scikit-learn" },
     { name = "scipy" },
     { name = "torch" },
@@ -629,8 +631,10 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.9" },
+    { name = "networkx", specifier = ">=3.3" },
     { name = "numpy", specifier = ">=2.0" },
-    { name = "scikit-learn", specifier = ">=1.5" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "scikit-learn", specifier = ">=1.8" },
     { name = "scipy", specifier = ">=1.13" },
     { name = "torch", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cu130" },
 ]

@@ -8,8 +8,10 @@ dependencies = [
     "numpy>=2.0",
     "matplotlib>=3.9",
     "torch>=2.4",
-    "scikit-learn>=1.5",
+    "scikit-learn>=1.8",
     "scipy>=1.13",
+    "networkx>=3.3",
+    "pyyaml>=6.0",
 ]
 
 [dependency-groups]

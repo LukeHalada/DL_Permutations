@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 from concurrent.futures import ProcessPoolExecutor
 import yaml
@@ -54,9 +56,18 @@ MARGIN = model_config['margin']
 PLOT_RUNS = 3
 VARIANCE_THRESHOLD = 0.95
 
+def config_hash(*sections):
+    """Short hash of the given config sections. Caches derived from them carry it in their file names, so a changed
+    config never silently reuses data computed with the old one (code changes are not covered)."""
+    payload = json.dumps({s: config[s] for s in sections}, sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()[:8]
+
+
+DATA_HASH = config_hash('tsp_config', 'ga_config')
+
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUTPUT_DIR = os.path.join(ROOT_DIR, "outputs")
-TRAJECTORIES_PATH = os.path.join(OUTPUT_DIR, "trajectories.npz")
+TRAJECTORIES_PATH = os.path.join(OUTPUT_DIR, f"trajectories_{DATA_HASH}.npz")
 EMBEDDINGS_PATH = os.path.join(OUTPUT_DIR, "embeddings.npz")
 MODEL_PATH = os.path.join(OUTPUT_DIR, "contrastive_encoder.pt")
 PLOT_PATH = os.path.join(OUTPUT_DIR, "stn_pca.png")
